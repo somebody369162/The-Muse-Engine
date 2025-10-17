@@ -481,7 +481,7 @@
         
         async function generateCaseStudy() {
             const btn = document.getElementById('case-study-btn');
-            const concepts = [...new Set([...(currentResultsData.synonyms || []), ...(currentResultsData.related_words || []).map(item => item.word)])];
+            const concepts = [...new Set([...(currentResultsData.synonyms || []), ...(currentResultsData.antonyms || []), ...(currentResultsData.related_words || []).map(item => item.word)])];
             if (concepts.length === 0) {
                 generativeContainer.innerHTML = `<p class="text-center text-red-400">Not enough psychological concepts found.</p>`;
                 return;
@@ -493,7 +493,7 @@
 
         async function generateHypothesis() {
             const btn = document.getElementById('hypothesis-btn');
-            const concepts = [...new Set([wordInput.value.trim(), ...(currentResultsData.synonyms || []), ...(currentResultsData.related_words || []).map(item => item.word)])];
+            const concepts = [...new Set([wordInput.value.trim(), ...(currentResultsData.synonyms || []), ...(currentResultsData.antonyms || []), ...(currentResultsData.related_words || []).map(item => item.word)])];
             if (concepts.length === 0) {
                 generativeContainer.innerHTML = `<p class="text-center text-red-400">Not enough scientific concepts found.</p>`;
                 return;
@@ -505,7 +505,7 @@
 
         async function generateLegalClause() {
             const btn = document.getElementById('clause-btn');
-            const concepts = [...new Set([wordInput.value.trim(), ...(currentResultsData.synonyms || []), ...(currentResultsData.related_words || []).map(item => item.word)])];
+            const concepts = [...new Set([wordInput.value.trim(), ...(currentResultsData.synonyms || []), ...(currentResultsData.antonyms || []), ...(currentResultsData.related_words || []).map(item => item.word)])];
             if (concepts.length === 0) {
                 generativeContainer.innerHTML = `<p class="text-center text-red-400">Not enough legal concepts found.</p>`;
                 return;
@@ -517,7 +517,7 @@
         
         async function generateMedicalSummary() {
             const btn = document.getElementById('condition-btn');
-            const concepts = [...new Set([wordInput.value.trim(), ...(currentResultsData.synonyms || []), ...(currentResultsData.related_words || []).map(item => item.word)])];
+            const concepts = [...new Set([wordInput.value.trim(), ...(currentResultsData.synonyms || []), ...(currentResultsData.antonyms || []), ...(currentResultsData.related_words || []).map(item => item.word)])];
             if (concepts.length === 0) {
                 generativeContainer.innerHTML = `<p class="text-center text-red-400">Not enough medical concepts found.</p>`;
                 return;
