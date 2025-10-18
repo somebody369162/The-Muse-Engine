@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Muse Engine (v18 - Firebase Backend)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+        .spinner { border: 4px solid rgba(255, 255, 255, 0.2); border-left-color: #c084fc; border-radius: 50%; width: 2.5rem; height: 2.5rem; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .selected-word { box-shadow: 0 0 15px rgba(192, 132, 252, 0.6); transform: scale(1.05); border: 2px solid #c084fc; }
+        .focus-btn.active { transform: scale(1.1); box-shadow: 0 0 10px rgba(255,255,255,0.2); opacity: 1; }
+        #sidebar { transition: transform 0.3s ease-in-out; }
+        .sidebar-nav-link.active { color: #c084fc; background-color: rgba(192, 132, 252, 0.1); }
+        .sticky-controls { position: sticky; top: 8.5rem; z-index: 10; }
+        .tab.active { background-color: #581c87; color: white; border-bottom-color: #c084fc; }
+        .dropdown { position: relative; display: inline-block; }
+        .dropdown-content { display: none; position: absolute; background-color: #1f2937; min-width: 200px; box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2); z-index: 50; border-radius: 0.5rem; border: 1px solid #374151; }
+        .dropdown-content button { color: white; padding: 12px 16px; text-decoration: none; display: block; width: 100%; text-align: left; }
+        .dropdown-content button:hover { background-color: #374151; }
+        .dropdown-content button.active { background-color: #581c87; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 font-sans">
+    
+    <!-- Header, Tab Bar, Overlays, Sidebar (HTML is identical to v17) -->
+    <header class="fixed top-0 left-0 right-0 z-20 bg-gray-900/80 backdrop-blur-sm border-b border-gray-700 flex items-center justify-between p-4 h-20">
+        <button id="menu-button" class="p-2 rounded-md hover:bg-gray-700">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" /></svg>
+        </button>
+        <div class="text-center dropdown">
+             <button id="ultimate-session-button" class="text-3xl font-black text-purple-400 tracking-tight flex items-center gap-2">
+                <span id="ultimate-session-title"></span>
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+             </button>
+             <div id="ultimate-session-dropdown" class="dropdown-content"></div>
+        </div>
+        <div class="w-10"></div>
+    </header>
+    <div id="tab-bar-container" class="fixed top-20 left-0 right-0 z-10 bg-gray-800/90 backdrop-blur-sm border-b border-gray-700 h-14 flex items-center px-4 overflow-x-auto">
+        <div id="tab-bar" class="flex items-center gap-2"></div>
+        <button id="add-tab-button" class="ml-2 px-3 py-1 rounded-md bg-purple-700 hover:bg-purple-600 text-xl font-bold">+</button>
+    </div>
+    <div id="overlay" class="fixed inset-0 bg-black/60 z-30 hidden"></div>
+    <div id="modal-overlay" class="fixed inset-0 bg-black/60 z-40 hidden flex items-center justify-center p-4">
+        <div class="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-sm">
+            <h3 id="modal-title" class="text-2xl font-bold text-purple-400 mb-4"></h3>
+            <input type="text" id="modal-input" class="w-full bg-gray-700 text-white p-2 rounded-md mb-4 focus:ring-2 focus:ring-purple-500 focus:outline-none" placeholder="Enter name...">
+            <div class="flex justify-end gap-2">
+                <button id="modal-cancel" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md">Cancel</button>
+                <button id="modal-create" class="bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 px-4 rounded-md">Create</button>
+            </div>
+        </div>
+    </div>
+    <aside id="sidebar" class="fixed top-0 left-0 h-full w-64 bg-gray-800 shadow-xl z-40 transform -translate-x-full">
+        <div class="p-4 pt-8">
+            <nav class="flex flex-col gap-2 mt-6">
+                <button id="nav-home" class="sidebar-nav-link active text-left font-bold py-3 px-4 rounded-lg">Home</button>
+                <button id="nav-editor" class="sidebar-nav-link text-left font-bold py-3 px-4 rounded-lg">Editor</button>
+                <button id="nav-history" class="sidebar-nav-link text-left font-bold py-3 px-4 rounded-lg">History</button>
+            </nav>
+        </div>
+    </aside>
+
+    <div class="container mx-auto p-4 max-w-4xl pt-36"> 
+        <main>
+            <div id="home-page" class="page">
+                 <div id="controls-section" class="sticky-controls bg-gray-800/50 backdrop-blur-sm p-6 rounded-xl shadow-2xl border border-gray-700 mb-8">
+                    <div class="flex flex-col sm:flex-row gap-4">
+                        <input type="text" id="word-input" class="flex-grow bg-gray-700 text-white placeholder-gray-400 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 transition" placeholder="Enter word for this session...">
+                        <button id="evoke-button" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg transition duration-300 transform hover:scale-105 shadow-lg">Evoke</button>
+                    </div>
+                    <div class="mt-4 text-center">
+                        <label class="text-sm font-semibold text-gray-400 mb-2 block">SELECT CONTEXT FOCUS (Multiple)</label>
+                        <div id="focus-buttons" class="flex flex-wrap justify-center gap-2">
+                            <button class="focus-btn opacity-50 hover:opacity-100 bg-gray-200 text-black text-sm py-1 px-3 rounded-full transition" data-focus="writing">Writing</button>
+                            <button class="focus-btn opacity-50 hover:opacity-100 bg-blue-500 text-white text-sm py-1 px-3 rounded-full transition" data-focus="creative">Creative</button>
+                            <button class="focus-btn opacity-50 hover:opacity-100 bg-teal-500 text-white text-sm py-1 px-3 rounded-full transition" data-focus="research">Research</button>
+                            <button class="focus-btn opacity-50 hover:opacity-100 bg-green-500 text-white text-sm py-1 px-3 rounded-full transition" data-focus="psychology">Psychology</button>
+                            <button class="focus-btn opacity-50 hover:opacity-100 bg-cyan-500 text-white text-sm py-1 px-3 rounded-full transition" data-focus="medical">Medical</button>
+                            <button class="focus-btn opacity-50 hover:opacity-100 bg-gray-500 text-white text-sm py-1 px-3 rounded-full transition" data-focus="legal">Legal</button>
+                            <button class="focus-btn opacity-50 hover:opacity-100 bg-orange-500 text-white text-sm py-1 px-3 rounded-full transition" data-focus="real_estate">Real Estate</button>
+                            <button class="focus-btn opacity-50 hover:opacity-100 bg-fuchsia-500 text-white text-sm py-1 px-3 rounded-full transition" data-focus="programming">Programming</button>
+                        </div>
+                    </div>
+                    <div class="mt-4 pt-4 border-t border-gray-700 text-center">
+                        <label class="text-sm font-semibold text-gray-400 mb-2 block">PROVIDE CONTEXT</label>
+                        <div class="flex items-center justify-center gap-2">
+                             <label for="file-input" class="cursor-pointer bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition">Upload File</label>
+                            <input type="file" id="file-input" class="hidden" accept=".txt,.md">
+                            <div id="file-context-display" class="text-sm text-gray-300"></div>
+                        </div>
+                    </div>
+                </div>
+                <div id="results"></div>
+                <div id="generated-content" class="mt-8 space-y-6"></div>
+            </div>
+            <div id="editor-page" class="page hidden"></div>
+            <div id="history-page" class="page hidden"></div>
+        </main>
+    </div>
+
+    <!-- ADDED FIREBASE SCRIPTS -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // These global variables will be provided by the environment.
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        setLogLevel('debug'); // For development visibility
+
+        let userId = null;
+
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                console.log("Firebase user signed in:", user.uid);
+                userId = user.uid;
+                window.dispatchEvent(new CustomEvent('firebase-ready'));
+            } else {
+                 try {
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        console.log("Attempting sign in with custom token...");
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        console.log("No custom token, attempting anonymous sign in...");
+                        await signInAnonymously(auth);
+                    }
+                } catch (error) {
+                    console.error("Firebase Auth Error:", error);
+                }
+            }
+        });
+        
+        // Expose a function to be used by the main script
+        window.saveGenerationToFirebase = async (data) => {
+            if (!db || !userId) {
+                console.error("Firebase not ready or user not authenticated.");
+                return;
+            }
+            try {
+                const collectionPath = `/artifacts/${appId}/public/data/generations`;
+                const docRef = await addDoc(collection(db, collectionPath), {
+                    ...data,
+                    userId: userId, // Add the anonymous user ID
+                    createdAt: new Date().toISOString()
+                });
+                console.log("Document written to Firebase with ID: ", docRef.id);
+            } catch (e) {
+                console.error("Error adding document to Firebase: ", e);
+            }
+        };
+    </script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // All existing v17 JavaScript is here...
+            // Minor modification will be made to generateTextFromGemini
+            // to call window.saveGenerationToFirebase
+            
+            // --- DOM ELEMENT SELECTORS ---
+            const pages = { home: document.getElementById('home-page'), editor: document.getElementById('editor-page'), history: document.getElementById('history-page') };
+            const menuButton = document.getElementById('menu-button');
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('overlay');
+            const modalOverlay = document.getElementById('modal-overlay');
+            const modalTitle = document.getElementById('modal-title');
+            const modalInput = document.getElementById('modal-input');
+            const modalCancel = document.getElementById('modal-cancel');
+            const modalCreate = document.getElementById('modal-create');
+            const navLinks = { home: document.getElementById('nav-home'), editor: document.getElementById('nav-editor'), history: document.getElementById('nav-history') };
+            const wordInput = document.getElementById('word-input');
+            const evokeButton = document.getElementById('evoke-button');
+            const resultsContainer = document.getElementById('results');
+            const generatedContentContainer = document.getElementById('generated-content');
+            const focusButtons = document.querySelectorAll('.focus-btn');
+            const tabBar = document.getElementById('tab-bar');
+            const addTabButton = document.getElementById('add-tab-button');
+            const fileInput = document.getElementById('file-input');
+            const fileContextDisplay = document.getElementById('file-context-display');
+            const ultimateSessionButton = document.getElementById('ultimate-session-button');
+            const ultimateSessionTitle = document.getElementById('ultimate-session-title');
+            const ultimateSessionDropdown = document.getElementById('ultimate-session-dropdown');
+
+            // --- STATE MANAGEMENT ---
+            let ultimateSessions = [];
+            let currentUltimateSessionId = null;
+            let generationHistory = [];
+            let modalAction = null;
+
+            function createNewTab(name) { return { id: Date.now(), name: name, originalWord: '', activeContexts: new Set(['writing']), evokedData: null, generatedContent: null, editorContent: '', selectedWords: new Set(), fileContext: '', fileName: '' }; }
+            function createNewUltimateSession(name) { const firstTab = createNewTab('Tab 1'); return { id: Date.now() + 1, name: name, tabs: [firstTab], activeTabId: firstTab.id }; }
+            function getCurrentUltimateSession() { return ultimateSessions.find(us => us.id === currentUltimateSessionId); }
+            function getCurrentTab() { const us = getCurrentUltimateSession(); return us ? us.tabs.find(t => t.id === us.activeTabId) : null; }
+
+            // --- LOCAL STORAGE ---
+            function saveState() {
+                const serializableUltimateSessions = ultimateSessions.map(us => ({ ...us, tabs: us.tabs.map(t => ({ ...t, activeContexts: Array.from(t.activeContexts), selectedWords: Array.from(t.selectedWords) })) }));
+                localStorage.setItem('museUltimateSessions', JSON.stringify(serializableUltimateSessions));
+                localStorage.setItem('museCurrentUltimateSessionId', currentUltimateSessionId);
+                localStorage.setItem('museEngineHistory', JSON.stringify(generationHistory));
+            }
+            function loadState() {
+                const savedUltimateSessions = localStorage.getItem('museUltimateSessions');
+                const savedUltimateSessionId = localStorage.getItem('museCurrentUltimateSessionId');
+                const savedHistory = localStorage.getItem('museEngineHistory');
+                if (savedUltimateSessions) { ultimateSessions = JSON.parse(savedUltimateSessions).map(us => ({ ...us, tabs: us.tabs.map(t => ({ ...t, activeContexts: new Set(t.activeContexts), selectedWords: new Set(t.selectedWords) })) })); }
+                if (savedUltimateSessionId) currentUltimateSessionId = parseInt(savedUltimateSessionId);
+                if (savedHistory) generationHistory = JSON.parse(savedHistory);
+                if (ultimateSessions.length === 0) { const firstUS = createNewUltimateSession('Default Project'); ultimateSessions.push(firstUS); currentUltimateSessionId = firstUS.id; }
+            }
+
+            // --- RENDER FUNCTIONS ---
+            function renderAll() { renderUltimateSessionDropdown(); renderTabs(); renderCurrentTab(); saveState(); }
+            function renderUltimateSessionDropdown() {
+                const us = getCurrentUltimateSession();
+                ultimateSessionTitle.textContent = us.name;
+                ultimateSessionDropdown.innerHTML = '';
+                ultimateSessions.forEach(session => {
+                    const button = document.createElement('button'); button.textContent = session.name; button.className = session.id === currentUltimateSessionId ? 'active' : ''; button.addEventListener('click', () => switchUltimateSession(session.id));
+                    ultimateSessionDropdown.appendChild(button);
+                });
+                ultimateSessionDropdown.insertAdjacentHTML('beforeend', '<hr class="border-gray-600 my-1">');
+                const newButton = document.createElement('button'); newButton.textContent = '+ New Project'; newButton.addEventListener('click', () => showModal('newProject'));
+                ultimateSessionDropdown.appendChild(newButton);
+            }
+            function renderTabs() {
+                const us = getCurrentUltimateSession();
+                tabBar.innerHTML = '';
+                us.tabs.forEach(tab => {
+                    const tabEl = document.createElement('button'); tabEl.className = `tab px-4 py-2 rounded-t-lg border-b-2 whitespace-nowrap ${tab.id === us.activeTabId ? 'active' : 'border-transparent hover:bg-gray-700'}`; tabEl.textContent = tab.name; tabEl.addEventListener('click', () => switchTab(tab.id));
+                    tabBar.appendChild(tabEl);
+                });
+            }
+            function renderCurrentTab() {
+                const tab = getCurrentTab(); if (!tab) return;
+                wordInput.value = tab.originalWord;
+                focusButtons.forEach(btn => { btn.classList.toggle('active', tab.activeContexts.has(btn.dataset.focus)); btn.classList.toggle('opacity-50', !tab.activeContexts.has(btn.dataset.focus)); });
+                if (tab.fileName) { fileContextDisplay.innerHTML = `<span class="truncate">${tab.fileName}</span><button id="clear-file-button" class="ml-2 text-red-400 hover:text-red-300 font-bold">Clear</button>`; document.getElementById('clear-file-button').addEventListener('click', clearFileContext); } else { fileContextDisplay.innerHTML = ''; }
+                resultsContainer.innerHTML = ''; if (tab.evokedData) displayResults(tab.originalWord, tab.evokedData, tab.selectedWords);
+                generatedContentContainer.innerHTML = ''; if (tab.generatedContent) displayGeneratedContent(tab.generatedContent.text, tab.generatedContent.title);
+            }
+            function renderHistory() { pages.history.innerHTML = `<div class="bg-gray-800 p-6 rounded-xl shadow-lg"><div class="flex justify-between items-center mb-6"><h2 class="text-3xl font-bold text-purple-400">Generation History</h2><button id="clear-history-button-inner" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg text-sm">Clear History</button></div><div id="history-container-inner" class="space-y-4"></div></div>`; const historyContainer = document.getElementById('history-container-inner'); document.getElementById('clear-history-button-inner').addEventListener('click', clearHistory); if (generationHistory.length === 0) { historyContainer.innerHTML = '<p class="text-center text-gray-400">No history yet.</p>'; return; }
+                generationHistory.slice().reverse().forEach(item => { const card = document.createElement('div'); card.className = 'bg-gray-700 p-4 rounded-lg flex flex-col sm:flex-row justify-between sm:items-center gap-4'; card.innerHTML = `<div><h3 class="font-bold text-purple-300">${item.title}</h3><p class="text-xs text-gray-400 mt-1">${new Date(item.timestamp).toLocaleString()}</p></div><button data-text="${btoa(item.text)}" class="view-history-btn bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg transition w-full sm:w-auto">View in Editor</button>`; historyContainer.appendChild(card); }); }
+            function renderEditor() { pages.editor.innerHTML = `<div class="bg-gray-800 p-6 rounded-xl shadow-lg"><h2 class="text-3xl font-bold text-center mb-4 text-purple-400">Context Editor</h2><p class="text-center text-gray-400 mb-6">Refine your AI-generated text here.</p><textarea id="editor-textarea-inner" class="w-full h-96 bg-gray-700 text-white p-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="Your text will appear here..."></textarea><div class="flex justify-center gap-4 mt-4"><button id="copy-button-inner" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-5 rounded-lg transition transform hover:scale-105">Copy Text</button><button id="clear-button-inner" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-5 rounded-lg transition transform hover:scale-105">Clear Text</button></div></div>`; const editorTextarea = document.getElementById('editor-textarea-inner'); const tab = getCurrentTab(); editorTextarea.value = tab.editorContent; document.getElementById('copy-button-inner').addEventListener('click', () => { editorTextarea.select(); document.execCommand('copy'); }); document.getElementById('clear-button-inner').addEventListener('click', () => { editorTextarea.value = ''; tab.editorContent = ''; saveState(); }); }
+            
+            // --- MODAL LOGIC ---
+            function showModal(action) { modalAction = action; modalTitle.textContent = action === 'newProject' ? 'Create New Project' : 'Create New Tab'; modalInput.value = ''; modalInput.placeholder = action === 'newProject' ? `Project ${ultimateSessions.length + 1}` : `Tab ${getCurrentUltimateSession().tabs.length + 1}`; modalOverlay.classList.remove('hidden'); modalInput.focus(); }
+            function hideModal() { modalOverlay.classList.add('hidden'); }
+            function handleModalCreate() { const name = modalInput.value.trim() || modalInput.placeholder; if (modalAction === 'newProject') { const newUS = createNewUltimateSession(name); ultimateSessions.push(newUS); switchUltimateSession(newUS.id); } else if (modalAction === 'newTab') { const us = getCurrentUltimateSession(); const newTab = createNewTab(name); us.tabs.push(newTab); switchTab(newTab.id); } hideModal(); }
+            modalCreate.addEventListener('click', handleModalCreate);
+            modalCancel.addEventListener('click', hideModal);
+            modalInput.addEventListener('keyup', (e) => { if (e.key === 'Enter') handleModalCreate(); });
+
+            // --- EVENT HANDLERS & LOGIC ---
+            function switchUltimateSession(id) { currentUltimateSessionId = id; ultimateSessionDropdown.style.display = 'none'; renderAll(); }
+            function switchTab(id) { getCurrentUltimateSession().activeTabId = id; renderAll(); }
+            addTabButton.addEventListener('click', () => showModal('newTab'));
+            
+            pages.history.addEventListener('click', (e) => { if (e.target.classList.contains('view-history-btn')) { getCurrentTab().editorContent = atob(e.target.dataset.text); showPage('editor'); } });
+            function toggleMenu() { sidebar.classList.toggle('-translate-x-full'); overlay.classList.toggle('hidden'); }
+            menuButton.addEventListener('click', toggleMenu); overlay.addEventListener('click', toggleMenu);
+
+            function showPage(pageId) {
+                const tab = getCurrentTab();
+                if (document.getElementById('editor-textarea-inner')) tab.editorContent = document.getElementById('editor-textarea-inner').value;
+                Object.values(pages).forEach(p => p.classList.add('hidden')); pages[pageId].classList.remove('hidden');
+                Object.values(navLinks).forEach(l => l.classList.remove('active')); navLinks[pageId].classList.add('active');
+                if (pageId === 'editor') renderEditor();
+                if (pageId === 'history') renderHistory();
+                if (!sidebar.classList.contains('-translate-x-full')) toggleMenu();
+                saveState();
+            }
+
+            Object.keys(navLinks).forEach(key => navLinks[key].addEventListener('click', () => showPage(key)));
+            
+            function clearHistory() { generationHistory = []; saveState(); renderHistory(); }
+            focusButtons.forEach(button => { button.addEventListener('click', () => { const tab = getCurrentTab(); const focus = button.dataset.focus; if (tab.activeContexts.has(focus)) tab.activeContexts.delete(focus); else tab.activeContexts.add(focus); renderAll(); }); });
+
+            fileInput.addEventListener('change', (event) => { const file = event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = (e) => { const tab = getCurrentTab(); tab.fileContext = e.target.result; tab.fileName = file.name; renderAll(); }; reader.readAsText(file); });
+            function clearFileContext() { const tab = getCurrentTab(); tab.fileContext = ''; tab.fileName = ''; fileInput.value = ''; renderAll(); }
+            
+            ultimateSessionButton.addEventListener('click', () => { ultimateSessionDropdown.style.display = ultimateSessionDropdown.style.display === 'block' ? 'none' : 'block'; });
+            window.addEventListener('click', (e) => { if (!ultimateSessionButton.contains(e.target) && !ultimateSessionDropdown.contains(e.target)) ultimateSessionDropdown.style.display = 'none'; });
+
+            // --- CORE MUSE ENGINE LOGIC ---
+            evokeButton.addEventListener('click', () => getEvokedWords(wordInput.value.trim()));
+            wordInput.addEventListener('keyup', (e) => { if (e.key === 'Enter') evokeButton.click(); });
+
+            async function getEvokedWords(word) {
+                const tab = getCurrentTab(); if (!word) return;
+                tab.originalWord = word; tab.evokedData = null; tab.generatedContent = null; showLoading(resultsContainer, 'Evoking thoughts...'); generatedContentContainer.innerHTML = '';
+                const params = new URLSearchParams(); params.append('ml', word);
+                const topics = Array.from(tab.activeContexts).map(focus => ({ 
+                    writing: 'writing,literature,journalism,prose', creative: 'art,poetry', 
+                    research: 'research,science,academic,study', psychology: 'psychology,sociology,behavior',
+                    medical: 'medicine,health,biology', legal: 'law,legal,contracts', 
+                    real_estate: 'real estate,property,construction', programming: 'computer science,programming,software' 
+                }[focus] || '')).join(',');
+                if(topics) params.append('topics', topics); params.append('max', 20);
+                try { const response = await fetch(`https://api.datamuse.com/words?${params.toString()}`); tab.evokedData = await response.json(); tab.selectedWords = new Set(); renderAll(); } catch (error) { resultsContainer.innerHTML = `<p class="text-center text-red-400">Could not connect.</p>`; }
+            }
+            
+            function displayResults(word, data, selected) {
+                resultsContainer.innerHTML = ''; const container = document.createElement('div'); container.className = 'bg-gray-800 p-6 rounded-xl shadow-lg'; container.innerHTML = `<h2 class="text-3xl font-bold text-center mb-6">Evocations for <span class="text-purple-400">${word}</span></h2>`; const grid = document.createElement('div'); grid.className = 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3';
+                if (data.length > 0) { data.forEach(item => { const card = document.createElement('div'); card.className = `bg-gray-700 p-3 rounded-lg text-center cursor-pointer hover:bg-purple-600 transition-all duration-200 transform hover:-translate-y-1 ${selected.has(item.word) ? 'selected-word bg-purple-600' : ''}`; card.textContent = item.word; card.addEventListener('click', () => { const tab = getCurrentTab(); if (tab.selectedWords.has(item.word)) tab.selectedWords.delete(item.word); else tab.selectedWords.add(item.word); card.classList.toggle('selected-word'); card.classList.toggle('bg-purple-600'); saveState(); }); grid.appendChild(card); }); } else { grid.innerHTML = `<p class="col-span-full text-center text-gray-400">No evocations.</p>`; }
+                container.appendChild(grid); container.appendChild(createActionButtons(word)); resultsContainer.appendChild(container);
+            }
+
+            function createActionButtons(word) {
+                const actionsContainer = document.createElement('div'); actionsContainer.className = 'mt-6 pt-6 border-t border-gray-700 text-center'; actionsContainer.innerHTML = `<h3 class="text-xl mb-4 font-semibold text-gray-300">Generate:</h3>`; const buttonGrid = document.createElement('div'); buttonGrid.className = 'flex flex-wrap justify-center gap-3'; const actions = [ { id: 'poem', text: 'Poem', color: 'blue', prompt: `Write a short, evocative, two-stanza poem about "{originalWord}" using some of these related concepts: {words}.` }, { id: 'pitch', text: 'Startup Pitch', color: 'red', prompt: `You are a startup founder. Write a compelling one-paragraph elevator pitch for a new company based on the idea of "{originalWord}", incorporating these keywords: {words}.` }, { id: 'lil-ai', text: 'Clarify Lil AI', color: 'yellow', prompt: `Explain the concept of "{originalWord}" like I'm 5 years old, using simple analogies that might involve these related ideas: {words}.` }, { id: 'legal', text: 'Legal Clause', color: 'gray', prompt: `As a paralegal, draft a single, hypothetical legal clause for a contract related to "{originalWord}". Incorporate themes or terms from the following concepts: {words}. This is for educational purposes only.` }, { id: 'psychology', text: 'Psychology Abstract', color: 'green', prompt: `As a psychology researcher, write a brief abstract for a hypothetical study exploring the psychological aspects of "{originalWord}". Mention how these related concepts might be variables or factors in the study: {words}.` }, { id: 'medical', text: 'Medical Note', color: 'cyan', prompt: `As a clinician, write a brief, hypothetical patient note (SOAP format) regarding "{originalWord}". Incorporate these related medical concepts or observations: {words}. This is for educational purposes only.` }, { id: 'listing', text: 'Property Listing', color: 'orange', prompt: `As a real estate agent, write a short, appealing property listing description centered around the key feature of "{originalWord}". Mention these other attractive details: {words}.` }, { id: 'code', text: 'Code Comment', color: 'fuchsia', prompt: `As a senior software developer, write a clear, concise code comment explaining a hypothetical function that accomplishes "{originalWord}". Use some of the following terms in your explanation: {words}.` } ];
+                actions.forEach(action => { const button = document.createElement('button'); button.textContent = `✨ ${action.text}`; const colorClasses = { blue: 'bg-blue-600 hover:bg-blue-700', red: 'bg-red-600 hover:bg-red-700', yellow: 'bg-yellow-500 hover:bg-yellow-600 hover:text-black', gray: 'bg-gray-600 hover:bg-gray-700', green: 'bg-green-600 hover:bg-green-700', cyan: 'bg-cyan-600 hover:bg-cyan-700', orange: 'bg-orange-600 hover:bg-orange-700', fuchsia: 'bg-fuchsia-600 hover:bg-fuchsia-700' }; button.className = `action-btn ${colorClasses[action.color]} text-white font-bold py-2 px-4 rounded-lg transition transform hover:scale-105`; button.addEventListener('click', () => generateTextFromGemini(action.prompt, action.text, word)); buttonGrid.appendChild(button); });
+                const antonymBtn = document.createElement('button'); antonymBtn.textContent = '🔄 Find Antonyms'; antonymBtn.className = 'action-btn bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition transform hover:scale-105'; antonymBtn.addEventListener('click', () => getAntonyms(word)); buttonGrid.appendChild(antonymBtn);
+                actionsContainer.appendChild(buttonGrid); return actionsContainer;
+            }
+
+            async function generateTextFromGemini(prompt, title, word) {
+                showLoading(generatedContentContainer, `Generating ${title}...`); 
+                const tab = getCurrentTab(); 
+                const selectedList = Array.from(tab.selectedWords); 
+                let wordList = selectedList.length > 0 ? selectedList.join(', ') : "any related ideas"; 
+                let finalPrompt = prompt.replace('{words}', wordList).replace('{originalWord}', word); 
+                if (tab.fileContext) {
+                    finalPrompt = `Based on the following document context:\n\n---\n${tab.fileContext}\n---\n\nNow, using that context, perform the following task:\n${finalPrompt}`;
+                }
+                const payload = { contents: [{ parts: [{ text: finalPrompt }] }] }; 
+                const apiKey = ""; 
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+                
+                try { 
+                    const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); 
+                    const result = await response.json(); 
+                    const text = result.candidates?.[0]?.content?.parts?.[0]?.text; 
+                    if (text) { 
+                        tab.generatedContent = { text, title }; 
+                        const newHistoryItem = { title, text, timestamp: new Date().toISOString() }; 
+                        generationHistory.unshift(newHistoryItem); 
+                        if (generationHistory.length > 50) generationHistory.pop(); 
+                        
+                        // FIREBASE LOGGING
+                        if (window.saveGenerationToFirebase) {
+                            const dataToSave = {
+                                title: title,
+                                generatedText: text,
+                                originalWord: word,
+                                activeContexts: Array.from(tab.activeContexts),
+                                selectedWords: Array.from(tab.selectedWords),
+                                fileContextUsed: !!tab.fileContext
+                            };
+                            window.saveGenerationToFirebase(dataToSave);
+                        }
+                        
+                        renderAll(); 
+                    } else throw new Error('Invalid API response'); 
+                } catch (error) { 
+                    displayGeneratedContent("Sorry, the muse is sleeping.", "Generation Failed"); 
+                }
+            }
+            
+            async function getAntonyms(word) { const tab = getCurrentTab(); if (!word) return; tab.originalWord = `Antonyms for ${word}`; showLoading(resultsContainer, `Seeking opposites...`); generatedContentContainer.innerHTML = ''; try { const response = await fetch(`https://api.datamuse.com/words?rel_ant=${word}`); tab.evokedData = await response.json(); tab.selectedWords = new Set(); renderAll(); } catch(error) { resultsContainer.innerHTML = `<p class="text-center text-red-400">Could not find antonyms.</p>`; } }
+
+            function displayGeneratedContent(text, title) {
+                generatedContentContainer.innerHTML = ''; const card = document.createElement('div'); card.className = 'bg-gray-800 p-6 rounded-xl shadow-lg mt-8 border-t-2 border-purple-500/30'; card.innerHTML = `<h3 class="text-2xl font-bold mb-4 text-purple-400">${title}</h3>`; const textContent = document.createElement('p'); textContent.className = 'text-gray-300 leading-relaxed whitespace-pre-wrap'; textContent.innerHTML = text.replace(/\*\*(.*?)\*\*/g, '<strong class="text-purple-300">$1</strong>'); const editButton = document.createElement('button'); editButton.textContent = 'Edit This'; editButton.className = 'bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg transition transform hover:scale-105 mt-4'; editButton.addEventListener('click', () => { getCurrentTab().editorContent = text; showPage('editor'); }); card.appendChild(textContent); card.appendChild(editButton); generatedContentContainer.appendChild(card);
+            }
+
+            function showLoading(container, message) { container.innerHTML = `<div class="flex flex-col items-center justify-center gap-4 text-gray-400 p-8"><div class="spinner"></div><p>${message}</p></div>`; }
+            
+            // --- INITIAL LOAD ---
+            loadState();
+            window.addEventListener('firebase-ready', () => {
+                console.log("Firebase is ready, initializing app.");
+                renderAll();
+                showPage('home');
+            }, { once: true });
+        });
+    </script>
+</body>
+</html>
+
